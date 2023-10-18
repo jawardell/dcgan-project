@@ -1,0 +1,11 @@
+torch
+numpy
+matplotlib
+torchvision
+jupyterlab
+ipython
+jupyter
+wandb
+jupyter-server-fileid
+nbclassic
+jupyter_server_ydoc

@@ -1,0 +1,24 @@
+#!/bin/bash
+#SBATCH -N 1
+#SBATCH -n 1
+#SBATCH -c 1
+#SBATCH --mem=10g
+#SBATCH -p qTRD
+#SBATCH -t 1440
+#SBATCH -J jupyter
+#SBATCH --output=jupyter-%j.out
+#SBATCH -A psy53c17
+#SBATCH --mail-type=ALL
+#SBATCH --mail-user=jwardell1@student.gsu.edu
+#SBATCH --oversubscribe
+
+export PATH=/data/users2/jwardell1/miniconda3/bin:$PATH
+
+source /data/users2/jwardell1/miniconda3/etc/profile.d/conda.sh
+
+CONDA_PATH=`which conda`
+
+eval "$(${CONDA_PATH} shell.bash hook)"
+conda activate /data/users2/jwardell1/miniconda3/envs/dcgan
+cat /etc/hosts
+jupyter-lab --ip=0.0.0.0 --port=${1:-8892}
