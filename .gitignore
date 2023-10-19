@@ -1,2 +1,5 @@
 wandb/
 data/
+*.out
+*.err
+jobs/
