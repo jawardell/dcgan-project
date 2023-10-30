@@ -6,7 +6,7 @@
 #SBATCH -p qTRD
 #SBATCH -t 1440
 #SBATCH -J jupyter
-#SBATCH --output=jupyter-%j.out
+#SBATCH --output=./jobs/jupyter-%j.out
 #SBATCH -A psy53c17
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=jwardell1@student.gsu.edu
