@@ -4,3 +4,6 @@ data/
 *.err
 jobs/
 *checkpoint*
+alex_gpu_recommendations
+.ipynb_checkpoints/
+*.pth
