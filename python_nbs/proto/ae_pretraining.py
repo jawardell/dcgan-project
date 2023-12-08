@@ -17,10 +17,23 @@ import matplotlib.pyplot as plt
 import matplotlib.animation as animat
 import wandb
 
+'''
+This script pretrains encoder weights 
+with an autoencoder.
+'''
+
+if len(sys.argv) != 4:
+    print("Usage: python ae_pretraining.py learning_rate batch_size weight_decay")
+    print(sys.argv)
+    sys.exit()
 
 learning_rate = float(sys.argv[1])
 batch_size = int(sys.argv[2])
 weight_decay = float(sys.argv[3])
+print(f'learning_rate {learning_rate}')
+print(f'batch_size {batch_size}')
+print(f'weight_decay {weight_decay}')
+
 
 
 # Set random seed for reproducibility
@@ -86,6 +99,7 @@ test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
 print(len(test_dataset))
 print(len(test_loader))
 
+# custom weights initialization called on ``decoder`` and ``encoder``
 def weights_init(m):
     classname = m.__class__.__name__
     if classname.find('Conv') != -1:
@@ -143,7 +157,6 @@ encoder.apply(weights_init)
 print(encoder)
 
 
-# Generator Code
 
 class Decoder(nn.Module):
     def __init__(self, ngpu, dim_z):
@@ -195,7 +208,6 @@ criterion = nn.MSELoss()
 
 
 params = list(encoder.parameters()) + list(decoder.parameters())
-
 optimizer = torch.optim.Adam(params, lr=lr, weight_decay=weight_decay)
 
 
@@ -269,7 +281,6 @@ for epoch in range(num_epochs):
         # Put train data to device (CPU, GPU, or TPU)
         x = data.to(device)
 
-        #  what does this do? why is this needed here?
         optimizer.zero_grad()
         
         # Forward pass batch through D
@@ -319,7 +330,6 @@ for epoch in range(num_epochs):
     
     # Refresh Validation Statistics
     print('reset Validation statistics')
-    val_correct = 0
     val_loss_value = 0
 
     
@@ -374,3 +384,4 @@ for epoch in range(num_epochs):
 if best_model_state is not None:
     PATH = '../models/ae_pretraining_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
     torch.save(best_model_state, PATH)
+

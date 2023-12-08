@@ -7,3 +7,7 @@ jobs/
 alex_gpu_recommendations
 .ipynb_checkpoints/
 *.pth
+*.npy
+*.bin
+stl10_data/
+wandb/

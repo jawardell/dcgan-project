@@ -10,9 +10,13 @@ import numpy as np
 import wandb
 import sys
 
+'''
+This script is for performing a hyperparameter search 
+for encoder fintuning.
+'''
 
 if len(sys.argv) != 4:
-    print("Usage: python supervised_baseline.py learning_rate batch_size weight_decay")
+    print("Usage: python ae_pretraining.py learning_rate batch_size weight_decay")
     print(sys.argv)
     sys.exit()
 
@@ -24,64 +28,38 @@ print(f'batch_size {batch_size}')
 print(f'weight_decay {weight_decay}')
 
 
+image_size = 96
+
 # Create a new transformation that resizes the images
-transform = transforms.Compose([
-    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
-    transforms.RandomRotation(degrees=15),
-    # Convert the PIL Image to Torch Tensor before RandomErasing
-    transforms.ToTensor(),
-    transforms.RandomErasing(p=0.5, scale=(0.2, 0.33), ratio=(0.3, 0.3), value='random'),
-    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+transform=transforms.Compose([
+                               transforms.Resize(image_size),
+                               transforms.CenterCrop(image_size),
+                               transforms.ToTensor(),
+                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
 
 
-
 # Load STL-10 dataset
-train_dataset = STL10(root='./data', split='train', transform=transform, download=True)
+train_dataset = STL10(root='./data', split='train', transform=transform, download=False)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-print(len(train_dataset))
-print(len(train_loader))
 
-test_dataset = STL10(root='./data', split='test', transform=transform, download=True)
+
+test_dataset = STL10(root='./data', split='test', transform=transform, download=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-print(len(test_dataset))
-print(len(test_loader))
 
-
-# Number of channels in the training images. For color images this is 3
 nc = 3
-
-# Size of z latent vector (i.e. size of generator input)
-nz = 64
-
-# Size of feature maps in discriminator
 ndf = 96
-
-# Number of training epochs
 num_epochs = 100
-
-
-# Learning rate for optimizers
-#lr=0.001
 lr=learning_rate
-
-# Beta1 hyperparameter for Adam optimizers
 beta1 = 0.5
-
-# Number of GPUs available. Use 0 for CPU mode.
 ngpu = 1
-
-
-# Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
-
-
 
 import torch.nn as nn
 
-class Discriminator(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, ngpu, dim_z, num_classes):
-        super(Discriminator, self).__init__()
+        super(Encoder, self).__init__()
         self.ngpu = ngpu
         nc = 3  # Number of input channels for the 96x96x3 image
         self.main = nn.Sequential(
@@ -111,26 +89,13 @@ class Discriminator(nn.Module):
         c = self.fc(z)
         return c
 
-# Instantiate the model
-encoder = Discriminator(ngpu=0, dim_z=64, num_classes=10).to(device)
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-encoder.apply(weights_init)
-
-
+# Load Pretrained Weights
+encoder = Encoder(ngpu=0, dim_z=64, num_classes=10).to(device)
+PATH='/data/users2/jwardell1/dcgan-project/models/ae_pretraining_0.0001_256_0.0004.pth'
+encoder.main.load_state_dict(torch.load(PATH))
 
 criterion = nn.CrossEntropyLoss()
-
-
 optimizer = optim.Adam(encoder.parameters(), lr=lr, weight_decay=weight_decay)
-
 # set up wandb
 wandb.login()
 
@@ -142,64 +107,130 @@ wandb.init(
     # track hyperparameters and run metadata
     config={
     "learning_rate": lr,
-    "batch_size": batch_size,
     "weight_decay": weight_decay,
-    "epochs": num_epochs,
-    "architecture": "SBL-DA",
+    "batch_size": batch_size,
+    "architecture": "Encoder Finetuning",
     "dataset": "STL-10",
+    "epochs": num_epochs,
     }
 )
-    
+
 # Training loop
 best_loss = float('inf')
 best_model_state = None
+num_train = len(train_dataset)
+
+
+
+
+# Set up total loss/acc trackers
+all_loss = []
+all_acc = []
+all_correct = 0
+train_running_total = 0
+
+
+
+# Set up epochal loss/acc trackers
+epoch_loss = []
+epoch_acc = []
+
+
+# Set up validation loss/acc trackers
+val_loss = []
+val_acc = []
+val_running_total = 0
+
 
 
 
 print("Starting Training Loop...")
+
 # For each epoch
 for epoch in range(num_epochs):
-    train_loss_value = 0
-    train_correct = 0
-    
+    # Refresh Epoch Statistics
+    print('reset epoch statistics')
+    epoch_correct = 0
+    epoch_loss_val = 0
+
+
     # Set Network to Train Mode
     encoder.train()
 
+
     # For each batch in the dataloader
-    for i, (data, labels) in enumerate(train_loader, 0): 
+    for i, (data, labels) in enumerate(train_loader, 0):
+        # Put train data to device (CPU, GPU, or TPU)
         data_real = data.to(device)
         labels = labels.to(device)
+
+        #  what does this do? why is this needed here?
         optimizer.zero_grad()
+
+        # Forward pass batch through D
         output = encoder(data_real)
+
+
+        # Calculate loss on batch
         loss = criterion(output, labels)
         loss.backward()
         optimizer.step()
 
+
+
+        # Compute Predicted Labels for a Batch in Training Dataset
         predicted = torch.argmax(output.data, dim=1).to(device)
+
+
+
         correct = (predicted == labels).sum().item()
-        
-        train_correct += correct
-        train_loss_value += loss.item()
-        
-        train_accuracy = train_correct / len(train_dataset)
-        print(f'iteration {i} current loss: {loss.item()} current acc: {train_accuracy}')
 
 
-    wandb.log({"TrainAccuracy": train_accuracy})
 
-    train_loss = train_loss_value / len(train_loader)
+
+
+
+        # Update All Data
+        all_loss.append(loss.item())
+
+        all_correct += correct
+        train_running_total += labels.size(0)
+
+
+        # Compute All Loss/Acc at each datapoint
+        all_accuracy = all_correct / train_running_total
+        all_acc.append(all_accuracy)
+
+        print(f'iteration {i} current loss: {loss.item()} current acc: {all_accuracy}')
+
+
+        # Update Epoch Data
+        epoch_correct += correct
+        epoch_loss_val += loss.item()
+
+
     wandb.log({"TrainLoss": loss.item()})
+    wandb.log({"TrainAccuracy": all_accuracy})
+    
+    # Compute Epoch Loss/Acc at end of Epoch
+    epoch_accuracy = epoch_correct / num_train
+    epoch_acc.append(epoch_accuracy)
 
+    avg_epoch_loss = epoch_loss_val / len(train_loader)
+    epoch_loss.append(avg_epoch_loss)
 
-    print(f'\t\tTrain Epoch {epoch}/{num_epochs},Train Accuracy: {train_accuracy}, Train Loss: {train_loss}.')
-
-
+    print(f'\t\tEpoch {epoch}/{num_epochs} complete. Epoch loss {avg_epoch_loss} Epoch accuracy {epoch_accuracy}')
 
     # Validation Step
     print('Starting Validation Loop...')
+
+
+
+    # Refresh Validation Statistics
+    print('reset Validation statistics')
     val_correct = 0
     val_loss_value = 0
-    val_running_total = 0
+
 
     # Set the model to valuation mode
     encoder.eval()
@@ -228,26 +259,35 @@ for epoch in range(num_epochs):
             val_loss_value += v_loss.item()
 
 
+
     val_accuracy = val_correct / len(test_dataset)
+    val_acc.append(val_accuracy)
     wandb.log({"ValidationAccuracy": val_accuracy})
 
     
-    val_loss = val_loss_value / len(test_loader)
-    wandb.log({"ValidationLoss": val_loss})
+    avg_val_loss = val_loss_value / len(test_loader)
+    val_loss.append(avg_val_loss)
 
-    print(f"\t\tValidation Epoch {epoch}/{num_epochs}, Validation Accuracy: {val_accuracy}, Validation Loss: {val_loss}")
+    print(f"\t\tValidation Epoch {epoch}, Validation Accuracy: {val_accuracy}, Validation Loss: {avg_val_loss}")
+    wandb.log({"ValidationLoss": val_loss_value})
 
     # Update best model if this epoch had the higest accuracy so far
-    if train_loss < best_loss:
-        best_loss = train_loss
+    if avg_epoch_loss < best_loss:
+        best_loss = avg_epoch_loss
         print(f'best loss {best_loss}')
         best_model_state = encoder.main.state_dict()
 
 
 
-
 # Save the best model
 if best_model_state is not None:
-    PATH = '../models/sbl_da_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
+    PATH = '../models/finetuned_encoder_weights_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
     torch.save(best_model_state, PATH)
+
+
+
+
+
+
+
 

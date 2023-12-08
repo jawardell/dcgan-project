@@ -10,19 +10,21 @@ import numpy as np
 import wandb
 import sys
 
+'''
+This script is for performing a hyperparameter search 
+for encoder fintuning.
+'''
 
 if len(sys.argv) != 4:
-    print("Usage: python supervised_baseline.py learning_rate batch_size weight_decay")
+    print("Usage: python ae_pretraining.py learning_rate batch_size weight_decay")
     print(sys.argv)
     sys.exit()
 
 learning_rate = float(sys.argv[1])
 batch_size = int(sys.argv[2])
 weight_decay = float(sys.argv[3])
-print(f'learning_rate {learning_rate}')
-print(f'batch_size {batch_size}')
-print(f'weight_decay {weight_decay}')
 
+image_size = 96
 
 # Create a new transformation that resizes the images
 transform = transforms.Compose([
@@ -36,52 +38,28 @@ transform = transforms.Compose([
 
 
 
+
 # Load STL-10 dataset
-train_dataset = STL10(root='./data', split='train', transform=transform, download=True)
+train_dataset = STL10(root='./data', split='train', transform=transform, download=False)
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=True)
-print(len(train_dataset))
-print(len(train_loader))
 
-test_dataset = STL10(root='./data', split='test', transform=transform, download=True)
+
+test_dataset = STL10(root='./data', split='test', transform=transform, download=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=True)
-print(len(test_dataset))
-print(len(test_loader))
 
-
-# Number of channels in the training images. For color images this is 3
 nc = 3
-
-# Size of z latent vector (i.e. size of generator input)
-nz = 64
-
-# Size of feature maps in discriminator
 ndf = 96
-
-# Number of training epochs
 num_epochs = 100
-
-
-# Learning rate for optimizers
-#lr=0.001
 lr=learning_rate
-
-# Beta1 hyperparameter for Adam optimizers
 beta1 = 0.5
-
-# Number of GPUs available. Use 0 for CPU mode.
 ngpu = 1
-
-
-# Decide which device we want to run on
 device = torch.device("cuda:0" if (torch.cuda.is_available() and ngpu > 0) else "cpu")
-
-
 
 import torch.nn as nn
 
-class Discriminator(nn.Module):
+class Encoder(nn.Module):
     def __init__(self, ngpu, dim_z, num_classes):
-        super(Discriminator, self).__init__()
+        super(Encoder, self).__init__()
         self.ngpu = ngpu
         nc = 3  # Number of input channels for the 96x96x3 image
         self.main = nn.Sequential(
@@ -111,26 +89,13 @@ class Discriminator(nn.Module):
         c = self.fc(z)
         return c
 
-# Instantiate the model
-encoder = Discriminator(ngpu=0, dim_z=64, num_classes=10).to(device)
-
-
-def weights_init(m):
-    classname = m.__class__.__name__
-    if classname.find('Conv') != -1:
-        nn.init.normal_(m.weight.data, 0.0, 0.02)
-    elif classname.find('BatchNorm') != -1:
-        nn.init.normal_(m.weight.data, 1.0, 0.02)
-        nn.init.constant_(m.bias.data, 0)
-encoder.apply(weights_init)
-
-
+# Load Pretrained Weights
+encoder = Encoder(ngpu=0, dim_z=64, num_classes=10).to(device)
+PATH='/data/users2/jwardell1/dcgan-project/models/ae_pretraining_0.0001_256_0.0004.pth'
+encoder.main.load_state_dict(torch.load(PATH))
 
 criterion = nn.CrossEntropyLoss()
-
-
 optimizer = optim.Adam(encoder.parameters(), lr=lr, weight_decay=weight_decay)
-
 # set up wandb
 wandb.login()
 
@@ -142,14 +107,14 @@ wandb.init(
     # track hyperparameters and run metadata
     config={
     "learning_rate": lr,
-    "batch_size": batch_size,
     "weight_decay": weight_decay,
-    "epochs": num_epochs,
-    "architecture": "SBL-DA",
+    "batch_size": batch_size,
+    "architecture": "Encoder Finetuning",
     "dataset": "STL-10",
+    "epochs": num_epochs,
     }
 )
-    
+
 # Training loop
 best_loss = float('inf')
 best_model_state = None
@@ -248,6 +213,5 @@ for epoch in range(num_epochs):
 
 # Save the best model
 if best_model_state is not None:
-    PATH = '../models/sbl_da_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
+    PATH = '../models/finetuned_encoder_weights_da_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
     torch.save(best_model_state, PATH)
-

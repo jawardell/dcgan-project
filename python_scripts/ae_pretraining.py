@@ -80,13 +80,14 @@ batch_size = batch_size
 image_size = 96
 
 # Create a new transformation that resizes the images
-transform=transforms.Compose([
-                               transforms.Resize(image_size),
-                               transforms.CenterCrop(image_size),
-                               transforms.ToTensor(),
-                               transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
+transform = transforms.Compose([
+    transforms.ColorJitter(brightness=0.2, contrast=0.2, saturation=0.2, hue=0.1),
+    transforms.RandomRotation(degrees=15),
+    # Convert the PIL Image to Torch Tensor before RandomErasing
+    transforms.ToTensor(),
+    transforms.RandomErasing(p=0.5, scale=(0.2, 0.33), ratio=(0.3, 0.3), value='random'),
+    transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
-
 
 # Load STL-10 dataset
 train_dataset = STL10(root='./data', split='train+unlabeled', transform=transform, download=True)
@@ -386,5 +387,5 @@ for epoch in range(num_epochs):
     
 # Save the best model
 if best_model_state is not None:
-    PATH = '../models/ae_pretraining_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
+    PATH = '../models/ae_pretraining_DA_KI_{}_{}_{}.pth'.format(learning_rate, batch_size, weight_decay)
     torch.save(best_model_state, PATH)

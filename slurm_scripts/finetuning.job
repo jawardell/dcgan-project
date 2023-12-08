@@ -7,8 +7,8 @@
 #SBATCH --gres=gpu:A40:1
 #SBATCH --open-mode=append
 #SBATCH --time=1-00:00:00
-#SBATCH -J ptdaki
-#SBATCH --output=../jobs/supervised_baseline-%j.out
+#SBATCH -J ft
+#SBATCH --output=../jobs/finetuning-%j.out
 #SBATCH -A psy53c17
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=jwardell1@student.gsu.edu
@@ -25,8 +25,13 @@ CONDA_PATH=`which conda`
 eval "$(${CONDA_PATH} shell.bash hook)"
 conda activate /data/users2/jwardell1/miniconda3/envs/dcgan
 
-lr=0.00001
-bs=256
-wd=0.04
 
-python /data/users2/jwardell1/dcgan-project/python_scripts/ae_pretraining.py $lr $bs $wd
+lr=0.0001
+bs=128
+wd=0.0004
+
+echo "lr - $lr"
+echo "bs - $bs"
+echo "wd - $wd"
+
+python /data/users2/jwardell1/dcgan-project/python_scripts/finetuning.py $lr $bs $wd

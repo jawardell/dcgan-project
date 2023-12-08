@@ -7,7 +7,6 @@ from torch.utils.data import DataLoader
 from torch.optim.lr_scheduler import StepLR
 import matplotlib.pyplot as plt
 import numpy as np
-import wandb
 import sys
 import random
 
@@ -142,24 +141,6 @@ def generate_n_samples_per_class(dataset, labels, num_samples_per_class):
 
 
 
-# set up wandb
-wandb.login()
-
-# start a new wandb run to track this script
-wandb.init(
-    # set the wandb project where this run will be logged
-    project="dcgan-project",
-    
-    # track hyperparameters and run metadata
-    config={
-    "learning_rate": lr,
-    "batch_size": batch_size,
-    "weight_decay": weight_decay,
-    "epochs": num_epochs,
-    "architecture": "SBL-PCT",
-    "dataset": "STL-10",
-    }
-)
 
 # Lists to store data for plotting
 percentages = []
@@ -183,10 +164,9 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
     subset_train_loader = DataLoader(subset_train_dataset, batch_size=batch_size, shuffle=True)
 
 
-
-
-    model = Encoder(ngpu=0, dim_z=64, num_classes=10).to(device)
-    model.apply(weights_init)
+    model = Encoder(ngpu=1, dim_z=64, num_classes=10).to(device)
+    PATH='/data/users2/jwardell1/dcgan-project/models/ae_pretraining_0.0001_256_0.0004.pth'
+    model.main.load_state_dict(torch.load(PATH))
     criterion = nn.CrossEntropyLoss()
     optimizer = optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -227,10 +207,8 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
             print(f'iteration {i} current loss: {loss.item()} current acc: {train_accuracy}')
     
     
-        wandb.log({"TrainAccuracy": train_accuracy})
     
         train_loss = train_loss_value / len(train_loader)
-        wandb.log({"TrainLoss": loss.item()})
     
     
         print(f'\t\tTrain Epoch {epoch}/{num_epochs},Train Accuracy: {train_accuracy}, Train Loss: {train_loss}.')
@@ -241,7 +219,7 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
         print('Starting Validation Loop...')
         val_correct = 0
         val_loss_value = 0
-        val_running_total = 0	
+        val_running_total = 0
         val_acc = []
     
         # Set the model to valuation mode
@@ -273,11 +251,9 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
     
         val_accuracy = val_correct / len(test_dataset)
         val_acc.append(val_accuracy)
-        wandb.log({"ValidationAccuracy": val_accuracy})
     
         
         val_loss = val_loss_value / len(test_loader)
-        wandb.log({"ValidationLoss": val_loss})
     
         print(f"\t\tValidation Epoch {epoch}/{num_epochs}, Validation Accuracy: {val_accuracy}, Validation Loss: {val_loss}")
     
@@ -305,7 +281,7 @@ if best_model_state is not None:
 plt.plot(percentages, avg_val_accs, marker='o')
 plt.xlabel('Percentage of Labeled Data')
 plt.ylabel('Validation Accuracy')
-plt.title('SBL Validation Accuracy vs Percentage of Labeled Data')
+plt.title('FT Validation Accuracy vs Percentage of Labeled Data')
 plt.grid(True)
 plt.savefig('../models/sbl_acc_per.png')
-np.save('../models/sbl_avg_val_accs_{}_{}_{}.npy'.format(learning_rate, batch_size, weight_decay), avg_val_accs)
+np.save('../models/ft_avg_val_accs_{}_{}_{}.npy'.format(learning_rate, batch_size, weight_decay), avg_val_accs)

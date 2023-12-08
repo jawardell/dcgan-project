@@ -7,8 +7,9 @@
 #SBATCH --gres=gpu:A40:1
 #SBATCH --open-mode=append
 #SBATCH --time=1-00:00:00
-#SBATCH -J ptdaki
-#SBATCH --output=../jobs/supervised_baseline-%j.out
+#SBATCH -J aehps
+#SBATCH --array=0-47%8
+#SBATCH --output=../jobs/pthp-%j.out
 #SBATCH -A psy53c17
 #SBATCH --mail-type=ALL
 #SBATCH --mail-user=jwardell1@student.gsu.edu
@@ -25,8 +26,18 @@ CONDA_PATH=`which conda`
 eval "$(${CONDA_PATH} shell.bash hook)"
 conda activate /data/users2/jwardell1/miniconda3/envs/dcgan
 
-lr=0.00001
-bs=256
-wd=0.04
+PARAMS_FILE=/data/users2/jwardell1/dcgan-project/slurm_scripts/parameter_combinations.txt
+IFS=$'\n'
+params_combinations_array=($(cat $PARAMS_FILE))
+
+IFS=$' '
+current_params=(${params_combinations_array[$SLURM_ARRAY_TASK_ID]})
+lr=${current_params[0]}
+bs=${current_params[1]}
+wd=${current_params[2]}
+
+echo "lr - $lr"
+echo "bs - $bs"
+echo "wd - $wd"
 
 python /data/users2/jwardell1/dcgan-project/python_scripts/ae_pretraining.py $lr $bs $wd

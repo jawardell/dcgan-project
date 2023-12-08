@@ -28,6 +28,24 @@ transform = transforms.Compose([
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5)),
 ])
 
+# set up wandb
+wandb.login()
+
+# start a new wandb run to track this script
+wandb.init(
+    # set the wandb project where this run will be logged
+    project="dcgan-project",
+    
+    # track hyperparameters and run metadata
+    config={
+    "learning_rate": lr,
+    "batch_size": batch_size,
+    "weight_decay": weight_decay,
+    "epochs": num_epochs,
+    "architecture": "SBL-PCT",
+    "dataset": "STL-10",
+    }
+)
 
 # Load STL-10 dataset
 train_dataset = STL10(root='./data', split='train', transform=transform, download=True)
@@ -142,24 +160,6 @@ def generate_n_samples_per_class(dataset, labels, num_samples_per_class):
 
 
 
-# set up wandb
-wandb.login()
-
-# start a new wandb run to track this script
-wandb.init(
-    # set the wandb project where this run will be logged
-    project="dcgan-project",
-    
-    # track hyperparameters and run metadata
-    config={
-    "learning_rate": lr,
-    "batch_size": batch_size,
-    "weight_decay": weight_decay,
-    "epochs": num_epochs,
-    "architecture": "SBL-PCT",
-    "dataset": "STL-10",
-    }
-)
 
 # Lists to store data for plotting
 percentages = []
@@ -241,8 +241,7 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
         print('Starting Validation Loop...')
         val_correct = 0
         val_loss_value = 0
-        val_running_total = 0	
-        val_acc = []
+        val_running_total = 0
     
         # Set the model to valuation mode
         model.eval()
@@ -272,7 +271,6 @@ for percent in range(10, 101, 10):  # Train on 10%, 20%, ..., 100% of the labele
     
     
         val_accuracy = val_correct / len(test_dataset)
-        val_acc.append(val_accuracy)
         wandb.log({"ValidationAccuracy": val_accuracy})
     
         
